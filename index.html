@@ -36,16 +36,78 @@
         }
 
         .recipe-item {
-            border-bottom: 1px solid #ddd;
-            padding: 10px 0;
+            border: 1px solid #e0e0e0;
+            padding: 20px;
+            margin-bottom: 15px;
+            border-radius: 12px;
+            background: white;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.05);
+            transition: transform 0.2s, box-shadow 0.2s;
         }
 
-        .recipe-item:last-child {
-            border-bottom: none;
+        .recipe-item:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+        }
+
+        .recipe-header {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            margin-bottom: 15px;
+        }
+
+        .recipe-header input[type="checkbox"] {
+            width: 20px;
+            height: 20px;
+            margin: 0;
+            cursor: pointer;
+            accent-color: #4CAF50;
+        }
+
+        .recipe-header h3 {
+            margin: 0;
+            font-size: 1.4em;
+            color: #2c3e50;
+        }
+
+        .recipe-details {
+            background: #f8f9fa;
+            padding: 15px;
+            border-radius: 8px;
+            margin-bottom: 15px;
+        }
+
+        .recipe-details p {
+            margin: 8px 0;
+            color: #555;
         }
 
         .ingredient-list {
-            margin: 10px 0;
+            background: #f8f9fa;
+            padding: 15px;
+            border-radius: 8px;
+            margin-bottom: 15px;
+        }
+
+        .ingredient-list h4, .instructions h4 {
+            color: #2c3e50;
+            margin-top: 0;
+            margin-bottom: 10px;
+            font-size: 1.1em;
+        }
+
+        .instructions {
+            background: #f8f9fa;
+            padding: 15px;
+            border-radius: 8px;
+            margin-bottom: 15px;
+        }
+
+        .instructions p {
+            margin: 0;
+            line-height: 1.6;
+            color: #555;
         }
 
         .ingredient-input {
@@ -145,6 +207,7 @@
 <body>
     <div class="header">
         <h1>Mes Recettes</h1>
+        <button id="generateShoppingList" onclick="generateShoppingList()" style="display: none;">Générer la liste de courses</button>
     </div>
 
     <input type="text" class="search-bar" placeholder="Rechercher une recette..." oninput="searchRecipes(this.value)">
@@ -183,6 +246,8 @@
 
     <script>
         let recipes = JSON.parse(localStorage.getItem('recipes') || '[]');
+        let selectedRecipes = new Set();
+        document.getElementById('generateShoppingList').style.display = 'none';
 
         function addIngredient() {
             const div = document.createElement('div');
@@ -254,13 +319,16 @@
                 ? '<p>Aucune recette disponible.</p>'
                 : recipesToShow.map(recipe => `
                     <div class="recipe-item">
-                        <h3>${recipe.name}</h3>
+                        <div class="recipe-header">
+                            <input type="checkbox" onchange="toggleRecipe(${recipe.id})">
+                            <h3>${recipe.name}</h3>
+                        </div>
                         <div class="recipe-details">
                             <p><strong>Pour:</strong> ${recipe.servings} personnes</p>
                             <p><strong>Préparation:</strong> ${recipe.prepTime} min</p>
                             <p><strong>Cuisson:</strong> ${recipe.cookTime} min</p>
                             <p><strong>Difficulté:</strong> ${recipe.difficulty}</p>
-                            ${recipe.videoUrl ? `<p><a href="${recipe.videoUrl}" target="_blank">Voir la vidéo</a></p>` : ''}
+                            ${recipe.videoUrl ? `<p><a href="${recipe.videoUrl}" target="_blank" class="video-link">Voir la vidéo</a></p>` : ''}
                         </div>
                         <div class="ingredient-list">
                             <h4>Ingrédients:</h4>
@@ -275,6 +343,76 @@
                         <button class="delete" onclick="deleteRecipe(${recipe.id})">Supprimer</button>
                     </div>
                 `).join('');
+        }
+
+        function toggleRecipe(id) {
+            if (selectedRecipes.has(id)) {
+                selectedRecipes.delete(id);
+            } else {
+                selectedRecipes.add(id);
+            }
+            const generateButton = document.getElementById('generateShoppingList');
+            generateButton.style.display = selectedRecipes.size > 0 ? 'block' : 'none';
+        }
+
+        function generateShoppingList() {
+            const ingredients = {};
+            
+            recipes.filter(r => selectedRecipes.has(r.id)).forEach(recipe => {
+                recipe.ingredients.forEach(ing => {
+                    const key = `${ing.name}-${ing.unit}`;
+                    if (ingredients[key]) {
+                        ingredients[key].quantity += parseFloat(ing.quantity);
+                    } else {
+                        ingredients[key] = {
+                            name: ing.name,
+                            quantity: parseFloat(ing.quantity),
+                            unit: ing.unit
+                        };
+                    }
+                });
+            });
+
+            const shoppingList = Object.values(ingredients)
+                .map(ing => `${ing.quantity} ${ing.unit} ${ing.name}`)
+                .join('\n');
+
+            const modal = document.createElement('div');
+            modal.style.cssText = `
+                position: fixed;
+                top: 50%;
+                left: 50%;
+                transform: translate(-50%, -50%);
+                background: white;
+                padding: 20px;
+                border-radius: 8px;
+                box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+                max-width: 80%;
+                max-height: 80vh;
+                overflow-y: auto;
+                z-index: 1000;
+            `;
+
+            const overlay = document.createElement('div');
+            overlay.style.cssText = `
+                position: fixed;
+                top: 0;
+                left: 0;
+                right: 0;
+                bottom: 0;
+                background: rgba(0,0,0,0.5);
+                z-index: 999;
+            `;
+
+            modal.innerHTML = `
+                <h2>Liste de courses</h2>
+                <pre style="white-space: pre-wrap;">${shoppingList}</pre>
+                <button onclick="this.parentElement.remove(); document.querySelector('.modal-overlay').remove();">Fermer</button>
+            `;
+
+            overlay.className = 'modal-overlay';
+            document.body.appendChild(overlay);
+            document.body.appendChild(modal);
         }
 
         displayRecipes();
